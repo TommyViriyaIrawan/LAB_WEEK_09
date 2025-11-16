@@ -16,11 +16,19 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.runtime.snapshots.SnapshotStateList
-import com.example.lab_week_09.ui.theme.LAB_WEEK_09Theme
-import com.example.lab_week_09.ui.theme.OnBackgroundTitleText
-import com.example.lab_week_09.ui.theme.OnBackgroundItemText
-import com.example.lab_week_09.ui.theme.PrimaryTextButton
+import androidx.navigation.NavHostController
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.rememberNavController
+import com.squareup.moshi.Moshi
+import com.squareup.moshi.Types
+import com.example.lab_week_09.ui.theme.*
+import androidx.compose.foundation.layout.statusBarsPadding
 
+// DATA MODEL
+data class Student(
+    var name: String
+)
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -31,27 +39,44 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    Home()
+
+                    val navController = rememberNavController()
+                    App(navController)
                 }
             }
         }
     }
 }
 
-// -------------------------------------------------------
-// 2. DATA MODEL
-// -------------------------------------------------------
-data class Student(
-    var name: String
-)
-
-// -------------------------------------------------------
-// 3. PARENT COMPOSABLE (STATE HOLDER)
-// -------------------------------------------------------
+// ROOT NAVIGATION
 @Composable
-fun Home() {
+fun App(navController: NavHostController) {
 
-    // LIST STATE
+    NavHost(
+        navController = navController,
+        startDestination = "home"
+    ) {
+        composable("home") {
+            Home { jsonList ->
+                navController.navigate("resultContent/?listData=$jsonList")
+            }
+        }
+
+        composable(
+            "resultContent/?listData={listData}"
+        ) {
+            val json = it.arguments?.getString("listData").orEmpty()
+            ResultContent(json)
+        }
+    }
+}
+
+// HOME SCREEN (STATE HOLDER)
+@Composable
+fun Home(
+    navigateFromHomeToResult: (String) -> Unit
+) {
+
     val listData = remember {
         mutableStateListOf(
             Student("Tanu"),
@@ -60,68 +85,79 @@ fun Home() {
         )
     }
 
-    // INPUT FIELD STATE
-    var inputField = remember {
+    var inputField by remember {
         mutableStateOf(Student(""))
     }
 
     HomeContent(
         listData,
-        inputField.value,
+        inputField,
         onInputValueChange = { input ->
-            inputField.value = inputField.value.copy(name = input)
+            inputField = inputField.copy(name = input)
         },
         onButtonClick = {
-            if (inputField.value.name.isNotBlank()) {
-                listData.add(inputField.value)
-                inputField.value = Student("")
+            // FIX PROBLEM 1 — prevent empty submit
+            if (inputField.name.isNotBlank()) {
+                listData.add(inputField)
+                inputField = Student("")
             }
+        },
+        navigateFromHomeToResult = {
+
+            // BONUS — convert to JSON using Moshi
+            val moshi = Moshi.Builder().build()
+            val type = Types.newParameterizedType(List::class.java, Student::class.java)
+            val adapter = moshi.adapter<List<Student>>(type)
+            val json = adapter.toJson(listData.toList())
+
+            navigateFromHomeToResult(json)
         }
     )
 }
 
-// -------------------------------------------------------
-// 4. CHILD COMPOSABLE (UI CONTENT)
-// -------------------------------------------------------
+// HOME CONTENT UI
 @Composable
 fun HomeContent(
     listData: SnapshotStateList<Student>,
     inputField: Student,
     onInputValueChange: (String) -> Unit,
-    onButtonClick: () -> Unit
+    onButtonClick: () -> Unit,
+    navigateFromHomeToResult: () -> Unit
 ) {
-
     LazyColumn {
 
         item {
             Column(
                 modifier = Modifier
+                    .statusBarsPadding()
                     .padding(16.dp)
-                    .statusBarsPadding()   // ⭐ DITAMBAHKAN SUPAYA TIDAK KETUTUP KAMERA
                     .fillMaxSize(),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
 
-                // CUSTOM TITLE
-                OnBackgroundTitleText(
-                    text = stringResource(id = R.string.enter_item)
-                )
+                OnBackgroundTitleText(text = stringResource(id = R.string.enter_item))
 
                 TextField(
                     value = inputField.name,
-                    keyboardOptions = KeyboardOptions(
-                        keyboardType = KeyboardType.Text
-                    ),
-                    onValueChange = {
-                        onInputValueChange(it)
-                    }
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text),
+                    onValueChange = onInputValueChange
                 )
 
-                // CUSTOM BUTTON
-                PrimaryTextButton(
-                    text = stringResource(id = R.string.button_click)
-                ) {
-                    onButtonClick()
+                Row {
+
+                    // Disable button when input empty → FIX problem #1
+                    PrimaryTextButton(
+                        text = stringResource(id = R.string.button_click),
+                        enabled = inputField.name.isNotBlank()
+                    ) {
+                        onButtonClick()
+                    }
+
+                    PrimaryTextButton(
+                        text = "Finish"
+                    ) {
+                        navigateFromHomeToResult()
+                    }
                 }
             }
         }
@@ -129,24 +165,49 @@ fun HomeContent(
         items(listData) { item ->
             Column(
                 modifier = Modifier
-                    .padding(vertical = 4.dp)
-                    .fillMaxSize(),
+                    .padding(4.dp)
+                    .fillMaxWidth(),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-
-                // CUSTOM ITEM TEXT
                 OnBackgroundItemText(text = item.name)
             }
         }
     }
-
 }
 
-// OPTIONAL PREVIEW
+// RESULT PAGE (BONUS)
+@Composable
+fun ResultContent(jsonList: String) {
+
+    // Decode JSON → List<Student>
+    val moshi = Moshi.Builder().build()
+    val type = Types.newParameterizedType(List::class.java, Student::class.java)
+    val adapter = moshi.adapter<List<Student>>(type)
+    val studentList = adapter.fromJson(jsonList) ?: emptyList()
+
+    Column(
+        modifier = Modifier
+            .padding(16.dp)
+            .fillMaxSize(),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+
+        OnBackgroundTitleText(text = "Result Page")
+
+        LazyColumn {
+            items(studentList) { s ->
+                OnBackgroundItemText(text = s.name)
+                Spacer(modifier = Modifier.height(4.dp))
+            }
+        }
+    }
+}
+
 @Preview(showBackground = true)
 @Composable
 fun PreviewHome() {
     LAB_WEEK_09Theme {
-        Home()
+        val nav = rememberNavController()
+        App(nav)
     }
 }
