@@ -16,7 +16,20 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.runtime.snapshots.SnapshotStateList
+
+// << ADDED
+import androidx.navigation.NavHostController
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.rememberNavController
+import androidx.navigation.NavType
+import androidx.navigation.navArgument
+// << END ADDED
+
 import com.example.lab_week_09.ui.theme.LAB_WEEK_09Theme
+import com.example.lab_week_09.ui.theme.OnBackgroundTitleText
+import com.example.lab_week_09.ui.theme.OnBackgroundItemText
+import com.example.lab_week_09.ui.theme.PrimaryTextButton
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -27,7 +40,10 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    Home()
+                    // << ADDED — ganti root dari Home() ke App()
+                    val navController = rememberNavController()
+                    App(navController)
+                    // << END ADDED
                 }
             }
         }
@@ -42,12 +58,41 @@ data class Student(
 )
 
 // -------------------------------------------------------
+// 3. ROOT NAVIGATION (ADDED)
+// -------------------------------------------------------
+@Composable
+fun App(navController: NavHostController) {
+
+    NavHost(
+        navController = navController,
+        startDestination = "home"
+    ) {
+
+        composable("home") {
+            Home { listData ->
+                navController.navigate("resultContent/?listData=$listData")
+            }
+        }
+
+        composable(
+            "resultContent/?listData={listData}",
+            arguments = listOf(navArgument("listData") {
+                type = NavType.StringType
+            })
+        ) {
+            ResultContent(it.arguments?.getString("listData").orEmpty())
+        }
+    }
+}
+
+// -------------------------------------------------------
 // 3. PARENT COMPOSABLE (STATE HOLDER)
 // -------------------------------------------------------
 @Composable
-fun Home() {
+fun Home(
+    navigateFromHomeToResult: (String) -> Unit = {}   // << ADDED default parameter
+) {
 
-    // LIST STATE
     val listData = remember {
         mutableStateListOf(
             Student("Tanu"),
@@ -56,7 +101,6 @@ fun Home() {
         )
     }
 
-    // INPUT FIELD STATE
     var inputField = remember {
         mutableStateOf(Student(""))
     }
@@ -72,6 +116,9 @@ fun Home() {
                 listData.add(inputField.value)
                 inputField.value = Student("")
             }
+        },
+        navigateFromHomeToResult = {
+            navigateFromHomeToResult(listData.toList().toString())   // << ADDED
         }
     )
 }
@@ -84,12 +131,12 @@ fun HomeContent(
     listData: SnapshotStateList<Student>,
     inputField: Student,
     onInputValueChange: (String) -> Unit,
-    onButtonClick: () -> Unit
+    onButtonClick: () -> Unit,
+    navigateFromHomeToResult: () -> Unit   // << ADDED
 ) {
 
     LazyColumn {
 
-        // INPUT FORM
         item {
             Column(
                 modifier = Modifier
@@ -98,7 +145,9 @@ fun HomeContent(
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
 
-                Text(text = stringResource(id = R.string.enter_item))
+                OnBackgroundTitleText(
+                    text = stringResource(id = R.string.enter_item)
+                )
 
                 TextField(
                     value = inputField.name,
@@ -110,29 +159,51 @@ fun HomeContent(
                     }
                 )
 
-                Button(
-                    onClick = { onButtonClick() }
-                ) {
-                    Text(text = stringResource(id = R.string.button_click))
+                Row {  // << CHANGED ke Row untuk 2 tombol
+                    PrimaryTextButton(
+                        text = stringResource(id = R.string.button_click)
+                    ) {
+                        onButtonClick()
+                    }
+
+                    // << ADDED — tombol FINISH
+                    PrimaryTextButton(
+                        text = stringResource(id = R.string.button_navigate)
+                    ) {
+                        navigateFromHomeToResult()
+                    }
                 }
             }
         }
 
-        // LIST OF STUDENTS
         items(listData) { item ->
             Column(
                 modifier = Modifier
                     .padding(vertical = 4.dp)
-                    .fillMaxWidth(),
+                    .fillMaxSize(),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Text(text = item.name)
+                OnBackgroundItemText(text = item.name)
             }
         }
     }
 }
 
-// OPTIONAL PREVIEW
+// -------------------------------------------------------
+// 5. RESULT PAGE (ADDED)
+// -------------------------------------------------------
+@Composable
+fun ResultContent(listData: String) {
+    Column(
+        modifier = Modifier
+            .padding(vertical = 4.dp)
+            .fillMaxSize(),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        OnBackgroundItemText(text = listData)
+    }
+}
+
 @Preview(showBackground = true)
 @Composable
 fun PreviewHome() {
