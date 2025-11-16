@@ -48,6 +48,22 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+@Composable
+fun PrimaryTextButton(
+    text: String,
+    enabled: Boolean = true,
+    onClick: () -> Unit
+) {
+    Button(
+        onClick = onClick,
+        enabled = enabled,
+        modifier = Modifier.padding(8.dp)
+    ) {
+        Text(text)
+    }
+}
+
+
 // ROOT NAVIGATION
 @Composable
 fun App(navController: NavHostController) {
